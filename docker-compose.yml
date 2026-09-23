@@ -4,11 +4,17 @@ services:
     volumes:
       - ./reports:/app/reports
       - ./data:/app/data
-      - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - PROXY_URL=${PROXY_URL}
       - PROXY_KEY=${GROQ_API_KEY}
+    depends_on:
+      # the judge calls LiteLLM: wait until the proxy answers
+      litellm:
+        condition: service_healthy
+      # the red-teaming script calls the RAG API
+      backend:
+        condition: service_healthy
     profiles: ["manual"]
 
   meilisearch:
@@ -73,10 +79,13 @@ services:
       - redis
     restart: always
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:4000/health" ]
-      interval: 30s
+      # The LiteLLM image ships neither curl nor wget: use its Python interpreter.
+      # /health/liveliness needs no key and does not call the LLM providers.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 12
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
