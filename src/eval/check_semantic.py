@@ -31,7 +31,7 @@ def check_semantic_quality(report_files):
     }
 
     for m in all_metrics:
-        metric_id = m.get('metric_id')
+        metric_id = m.get('metric_name')  # Evidently 0.7.23 : "metric_id" -> "metric_name"
         
         if metric_id in THRESHOLDS:
             val = m.get('value', 0)
