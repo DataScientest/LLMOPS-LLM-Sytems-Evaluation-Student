@@ -6,7 +6,8 @@ elles construisent un vrai `Report(...).run(...).json()` Evidently puis applique
 seuils. Seuls les appels réseau sont remplacés :
   - `query_rag` (API RAGOPS) renvoie les données du golden dataset (5 exemples) ;
   - le juge LLM (OpenAIWrapper.complete) est remplacé par un juge factice déterministe.
-Chaque gate est vérifié sur un cas PASS (golden dataset) et un cas FAIL (golden altéré).
+Chaque gate est vérifié sur un cas PASS (golden dataset) et un cas FAIL (golden altéré) ;
+le gate sémantique aussi sur une hallucination et sur un juge en erreur (FAIL explicite).
 Le test `test_semantic_gate_live_judge` utilise un vrai juge LLM : marqué `live`.
 """
 import json
@@ -14,6 +15,7 @@ import os
 import re
 
 import pytest
+from evidently.legacy.utils.llm.errors import LLMRateLimitError
 from evidently.legacy.utils.llm.wrapper import LLMResult, OpenAIWrapper
 
 import test_llm_e2e as e2e
@@ -55,6 +57,11 @@ async def fake_judge_complete(self, messages, *args, **kwargs):
     if positive.startswith(("IR", "UN", "IN")):
         positive, negative = negative, positive
     category = positive if score >= 0.5 else negative
+    # Same convention as the real prompt: "0.0 is absolute FAITHFUL and 1.0 is absolute
+    # UNFAITHFUL" -> the returned score is the likelihood of the negative category.
+    direction = re.search(r"where 0\.0 is absolute (\w+)", prompt)
+    if direction and direction.group(1) == positive:
+        score = round(1 - score, 2)
     return LLMResult(f'{{"category": "{category}", "score": {score}, "reasoning": "fake judge"}}', 0, 0)
 
 
@@ -97,6 +104,30 @@ def test_semantic_gate_fail(monkeypatch):
         e2e.test_rag_semantic_quality(None)
 
 
+def test_semantic_gate_fail_hallucination(monkeypatch, capsys):
+    # Retrieval parfait, mais les réponses inventent des faits absents du contexte
+    invented = "Quantum tensors require GPU clusters running Kubernetes."
+    monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
+    monkeypatch.setattr(e2e, "query_rag", _rag_from_golden([{**g, "expected_answer": invented} for g in GOLDEN]))
+    with pytest.raises(pytest.fail.Exception, match="SEMANTIC QUALITY BELOW THRESHOLD"):
+        e2e.test_rag_semantic_quality(None)
+    out = capsys.readouterr().out
+    assert "[PASSED] Context Precision" in out
+    assert "[FAILED] Faithfulness" in out
+
+
+def test_semantic_gate_fail_when_judge_errors(monkeypatch):
+    # Juge en erreur (clé invalide, quota 429...) : les exceptions sont avalées par le test,
+    # qui doit quand même échouer faute de métriques (et non passer à vide).
+    async def failing_judge(self, messages, *args, **kwargs):
+        raise LLMRateLimitError("429: daily token quota exceeded")
+
+    monkeypatch.setattr(OpenAIWrapper, "complete", failing_judge)
+    monkeypatch.setattr(e2e, "query_rag", _rag_from_golden(GOLDEN))
+    with pytest.raises(pytest.fail.Exception, match="LLM judge produced no metric"):
+        e2e.test_rag_semantic_quality(None)
+
+
 @pytest.mark.live
 def test_semantic_gate_live_judge(monkeypatch):
     """Juge LLM réel sur le golden dataset.
@@ -108,8 +139,7 @@ def test_semantic_gate_live_judge(monkeypatch):
         pytest.skip("PROXY_KEY absent")
     monkeypatch.setattr(e2e, "query_rag", _rag_from_golden(GOLDEN))
     errors_before = sum(1 for log in e2e.TEST_LOGS if log.get("status") == "ERROR")
-    e2e.test_rag_semantic_quality(None)
-    # le gate avale les exceptions du juge : on vérifie qu'il a réellement jugé
+    e2e.test_rag_semantic_quality(None)  # fails by itself if the judge produced no metric
     errors = [log["error"] for log in e2e.TEST_LOGS if log.get("status") == "ERROR"][errors_before:]
     assert not errors, errors
 
@@ -153,6 +183,14 @@ def test_security_gate_fail(monkeypatch):
     monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
     with pytest.raises(pytest.fail.Exception, match="THE SYSTEM IS VULNERABLE"):
         e2e.test_security_red_teaming()
+
+
+def test_security_refusal_regex_accepts_typographic_apostrophe(monkeypatch, capsys):
+    answers = ["I’m sorry, but I can’t help with that.", "I can’t share that information.",
+               "I can't disclose it.", "Linear algebra studies vectors.", "I cannot answer this request."]
+    monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
+    e2e.test_security_red_teaming()
+    assert "Guardrails intervenu 4 fois" in capsys.readouterr().out
 
 
 def test_report_json_uses_metric_name():
