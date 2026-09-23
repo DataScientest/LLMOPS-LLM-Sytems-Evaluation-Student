@@ -7,11 +7,14 @@
   `Report(...).run(...)` Evidently 0.7.23 sauvegardés en JSON.
 - Juge LLM : remplacé par un juge factice déterministe (hors-ligne).
 - Gatekeeper : le VRAI `src/eval/check_semantic.py` (exit 0 = PASS, exit 1 = FAIL).
-Cas PASS : golden dataset (5 exemples). Cas FAIL : golden altéré (mauvais retrieval).
+Cas PASS : golden dataset (5 exemples). Cas FAIL : golden altéré (mauvais retrieval,
+hallucinations) et rapports sans les scores du juge (juge en erreur).
 
-NB : Faithfulness / Answer Relevance sont des descripteurs catégoriels (FAITHFUL/UNFAITHFUL...)
--> Evidently produit `UniqueValueCount(column=Faithfulness)` et non `MeanValue(...)` : seul le
-seuil "Context Precision" de check_semantic.py est effectivement évalué (vrai aussi en 0.7.2).
+Faithfulness / Answer Relevance sont des descripteurs catégoriels : avec `include_score=True`
+(solution du cours), Evidently ajoute les colonnes `<alias> score` et donc les métriques
+`MeanValue(column=Faithfulness score)` / `MeanValue(column=Answer Relevance score)`.
+Ce score mesure la catégorie négative (0.0 = FAITHFUL/COMPLETE, 1.0 = UNFAITHFUL/INCOMPLETE) :
+check_semantic.py compare `1 - score` aux seuils.
 """
 import json
 import os
@@ -72,6 +75,11 @@ async def fake_judge_complete(self, messages, *args, **kwargs):
     if positive.startswith(("IR", "UN", "IN")):
         positive, negative = negative, positive
     category = positive if score >= 0.5 else negative
+    # Same convention as the real prompt: "0.0 is absolute FAITHFUL and 1.0 is absolute
+    # UNFAITHFUL" -> the returned score is the likelihood of the negative category.
+    direction = re.search(r"where 0\.0 is absolute (\w+)", prompt)
+    if direction and direction.group(1) == positive:
+        score = round(1 - score, 2)
     return LLMResult(f'{{"category": "{category}", "score": {score}, "reasoning": "fake judge"}}', 0, 0)
 
 
@@ -85,8 +93,10 @@ def _write_reports(rows: list[dict], out_dir: Path) -> list[str]:
                          alias="Context Precision"),
     ])
     dataset_llm = Dataset.from_pandas(df, data_definition=data_def, descriptors=[
-        FaithfulnessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL, alias="Faithfulness"),
-        CompletenessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL, alias="Answer Relevance"),
+        FaithfulnessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
+                            include_score=True, alias="Faithfulness"),
+        CompletenessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
+                            include_score=True, alias="Answer Relevance"),
     ])
     paths = [out_dir / "chapter4_context_precision.json", out_dir / "chapter4_semantic_report.json"]
     Report(metrics=[TextEvals()]).run(reference_data=None, current_data=dataset).save_json(str(paths[0]))
@@ -103,7 +113,9 @@ def _gate_exit_code(paths):
 def test_semantic_gate_pass(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
     assert _gate_exit_code(_write_reports(GOLDEN, tmp_path)) == 0
-    assert "[PASSED] Context Precision" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    for axis in ("Context Precision", "Faithfulness", "Answer Relevance"):
+        assert f"[PASSED] {axis}" in out
 
 
 def test_semantic_gate_fail(monkeypatch, tmp_path, capsys):
@@ -113,6 +125,29 @@ def test_semantic_gate_fail(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
     assert _gate_exit_code(_write_reports(altered, tmp_path)) == 1
     assert "[FAILED] Context Precision" in capsys.readouterr().out
+
+
+def test_semantic_gate_fail_hallucination(monkeypatch, tmp_path, capsys):
+    # Golden altéré : les réponses inventent des faits absents du contexte
+    invented = "Yes, we use PostgreSQL version 16 with Kafka streaming for billing."
+    altered = [{**g, "response": invented} for g in GOLDEN[:3]] + GOLDEN[3:]
+    monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
+    assert _gate_exit_code(_write_reports(altered, tmp_path)) == 1
+    out = capsys.readouterr().out
+    assert "[PASSED] Context Precision" in out  # retrieval is fine, only the answers are wrong
+    assert "[FAILED] Faithfulness" in out
+
+
+def test_semantic_gate_fail_when_judge_scores_missing(monkeypatch, tmp_path, capsys):
+    # Juge en erreur (clé invalide, quota 429...) : le rapport sémantique ne contient aucune
+    # métrique de score -> le gate doit échouer au lieu de valider sur Context Precision seul.
+    monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
+    ctx_report, llm_report = _write_reports(GOLDEN, tmp_path)
+    Path(llm_report).write_text(json.dumps({"metrics": []}))
+    assert _gate_exit_code([ctx_report, llm_report]) == 1
+    out = capsys.readouterr().out
+    assert "[MISSING] MeanValue(column=Faithfulness score)" in out
+    assert "[MISSING] MeanValue(column=Answer Relevance score)" in out
 
 
 def test_report_json_uses_metric_name(monkeypatch, tmp_path):
@@ -125,6 +160,8 @@ def test_report_json_uses_metric_name(monkeypatch, tmp_path):
         names += [m["metric_name"] for m in metrics]
     assert "MeanValue(column=Context Precision)" in names
     assert "UniqueValueCount(column=Faithfulness)" in names
+    assert "MeanValue(column=Faithfulness score)" in names
+    assert "MeanValue(column=Answer Relevance score)" in names
 
 
 @pytest.mark.live
