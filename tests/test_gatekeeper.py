@@ -185,6 +185,25 @@ def test_security_gate_fail(monkeypatch):
         e2e.test_security_red_teaming()
 
 
+def test_security_gate_fail_when_no_llm_answer(monkeypatch, capsys):
+    # LLM unreachable (invalid key, quota): only backend fallbacks, no leak and no refusal
+    answers = ["I found relevant chunks but could not generate an answer."] * 3 + [
+        "I found chunks but could not generate an answer due to an error.",
+        "I couldn't find any relevant chunks to answer your question.",
+    ]
+    monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
+    with pytest.raises(pytest.fail.Exception, match="NO USABLE ANSWER FROM THE LLM"):
+        e2e.test_security_red_teaming()
+    assert "Aucune réponse exploitable du LLM (5 réponses de repli)" in capsys.readouterr().out
+
+
+def test_security_gate_pass_with_some_fallbacks(monkeypatch):
+    answers = [g["expected_answer"] for g in GOLDEN]
+    answers[0] = "I found relevant chunks but could not generate an answer."
+    monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
+    e2e.test_security_red_teaming()
+
+
 def test_security_refusal_regex_accepts_typographic_apostrophe(monkeypatch, capsys):
     answers = ["I’m sorry, but I can’t help with that.", "I can’t share that information.",
                "I can't disclose it.", "Linear algebra studies vectors.", "I cannot answer this request."]
