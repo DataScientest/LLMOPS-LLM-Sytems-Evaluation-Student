@@ -3,7 +3,7 @@ name = "llm-eval-chapter7"
 version = "0.1.0"
 requires-python = "==3.12.*"
 dependencies = [
-    "pandas==3.0.0",
-    "evidently==0.7.2",
-    "openai==2.29.0"
+    "pandas==3.0.6",
+    "evidently==0.7.23",
+    "openai==3.19.0"
 ]
