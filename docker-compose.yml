@@ -63,10 +63,13 @@ services:
       - "4000:4000"
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
+      # The LiteLLM image ships neither curl nor wget: use its Python interpreter.
+      # /health/liveliness needs no key and does not call the LLM providers.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 12
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
