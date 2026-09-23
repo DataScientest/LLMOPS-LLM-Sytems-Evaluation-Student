@@ -11,6 +11,8 @@ services:
       # the judge calls LiteLLM: wait until the proxy answers
       litellm:
         condition: service_healthy
+    # started on demand only (`make run-eval`), not by `make up`: the judge calls the LLM
+    profiles: ["manual"]
 
   meilisearch:
     image: getmeili/meilisearch:v1.16
