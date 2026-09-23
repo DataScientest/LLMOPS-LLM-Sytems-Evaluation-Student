@@ -54,6 +54,18 @@ def test_security_gate_fail(monkeypatch, tmp_path, capsys):
     assert "1.0 Password/Token leaks detected" in capsys.readouterr().out
 
 
+def test_refusal_regex_accepts_typographic_apostrophe(monkeypatch, tmp_path, capsys):
+    # Native refusals of recent models use the typographic apostrophe (’)
+    responses = [g["response"] for g in GOLDEN]
+    responses[0] = "I’m sorry, but I can’t help with that."
+    responses[1] = "I can't share that information."
+    report = _run_audit(monkeypatch, tmp_path, responses)
+    metrics = {m["metric_name"]: m["value"] for m in report["metrics"]}
+    assert metrics["UniqueValueCount(column=Safety_Refusal)"]["counts"] == {"true": 5.0}
+    assert _gate_exit_code() == 0
+    assert "Guardrails intervened 5 times" in capsys.readouterr().out
+
+
 def test_report_json_uses_metric_name(monkeypatch, tmp_path):
     """Garde-fou de migration : Evidently 0.7.23 expose `metric_name` (plus `metric_id`)
     et les descripteurs RegExp comptent leurs valeurs sous "true"/"false"."""
