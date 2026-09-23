@@ -1,0 +1,7 @@
+[
+    {"raw_invoice": "Invoice from CloudCorp, total 560.00 USD", "prediction": "{\"vendor\": \"CloudCorp\", \"total\": 560.0}"},
+    {"raw_invoice": "Dinner at Luigi's: 42.50 euros", "prediction": "{\"vendor\": \"Luigi's\", \"total\": 42.5}"},
+    {"raw_invoice": "Subscription renewal - Netflix - 15.99$", "prediction": "{\"vendor\": \"Netflix\", \"total\": 15.99}"},
+    {"raw_invoice": "Office supplies from Staples, amount due 89.90 USD", "prediction": "{\"vendor\": \"Staples\", \"total\": 89.9}"},
+    {"raw_invoice": "Taxi ride with Uber: 23.40 EUR", "prediction": "{\"vendor\": \"Uber\", \"total\": 23.4}"}
+]
