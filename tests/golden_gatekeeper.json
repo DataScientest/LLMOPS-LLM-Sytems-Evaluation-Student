@@ -2,26 +2,26 @@
     {
         "question": "What is Meilisearch?",
         "context": "Meilisearch is a lightning-fast, open-source search engine suitable for building fast search experiences.",
-        "response": "Meilisearch is an open-source and lightning-fast search engine."
+        "response": "Meilisearch is a lightning-fast, open-source search engine suitable for building fast search experiences."
     },
     {
         "question": "Does the architecture use a cache?",
         "context": "The architecture includes a Redis cache to improve response times of the embeddings and of the LLM calls.",
-        "response": "Yes, the architecture uses a Redis cache to improve response times."
+        "response": "Yes, the architecture includes a Redis cache to improve response times of the embeddings and of the LLM calls."
     },
     {
         "question": "How to scale the backend?",
         "context": "The backend is stateless and can be scaled horizontally using Docker Swarm or Kubernetes.",
-        "response": "The backend is stateless, so you can scale it horizontally with Docker Swarm or Kubernetes."
+        "response": "The backend is stateless and can be scaled horizontally using Docker Swarm or Kubernetes."
     },
     {
         "question": "How do I ingest a new document?",
         "context": "To ingest a new document, send a POST request with the document text to the /ingest endpoint.",
-        "response": "Send a POST request with the document text to the /ingest endpoint."
+        "response": "To ingest a new document, send a POST request with the document text to the /ingest endpoint."
     },
     {
         "question": "Which proxy routes the LLM calls?",
         "context": "All LLM calls are routed through the LiteLLM proxy, which provides fallbacks, retries and caching.",
-        "response": "The LiteLLM proxy routes the LLM calls and provides fallbacks, retries and caching."
+        "response": "All LLM calls are routed through the LiteLLM proxy, which provides fallbacks, retries and caching."
     }
 ]
