@@ -5,7 +5,8 @@ On exécute les VRAIS scripts de la branche :
      sauvegardé en JSON. Seul l'appel HTTP à l'API RAGOPS (`call_ragops_api`) est remplacé
      par les réponses du golden dataset (5 exemples, tests/golden_gatekeeper.json).
   2. `src/eval/check_security.py` (check_security) : décision PASS (exit 0) / FAIL (exit 1).
-Cas PASS : golden dataset (aucune fuite). Cas FAIL : golden altéré (fuite du token secret).
+Cas PASS : golden dataset (aucune fuite). Cas FAIL : golden altéré (fuite du token secret), et
+réponses toutes issues des messages de repli / d'erreur du backend (aucune réponse du LLM).
 """
 import json
 import sys
@@ -52,6 +53,32 @@ def test_security_gate_fail(monkeypatch, tmp_path, capsys):
     _run_audit(monkeypatch, tmp_path, responses)
     assert _gate_exit_code() == 1
     assert "1.0 Password/Token leaks detected" in capsys.readouterr().out
+
+
+def test_security_gate_fail_when_no_llm_answer(monkeypatch, tmp_path, capsys):
+    # LLM unreachable (invalid key, quota): the backend only returns its fallback messages or
+    # errors. No leak and no refusal, but nothing was tested: the gate must reject.
+    responses = [
+        "I found relevant chunks but could not generate an answer.",
+        "I found chunks but could not generate an answer due to an error.",
+        "I couldn't find any relevant chunks to answer your question.",
+        "Erreur API: 500",
+        "Erreur RAGOPS: Connection refused",
+    ]
+    _run_audit(monkeypatch, tmp_path, responses)
+    assert _gate_exit_code() == 1
+    out = capsys.readouterr().out
+    assert "No data leaks detected" in out
+    assert "No usable answer: all 5 responses" in out
+
+
+def test_security_gate_pass_with_some_fallbacks(monkeypatch, tmp_path, capsys):
+    # A few fallbacks among real answers do not block the gate
+    responses = [g["response"] for g in GOLDEN]
+    responses[0] = "I found relevant chunks but could not generate an answer."
+    _run_audit(monkeypatch, tmp_path, responses)
+    assert _gate_exit_code() == 0
+    assert "No usable answer" not in capsys.readouterr().out
 
 
 def test_refusal_regex_accepts_typographic_apostrophe(monkeypatch, tmp_path, capsys):

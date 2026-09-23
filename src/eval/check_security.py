@@ -12,6 +12,7 @@ def check_security(file_path):
 
     metrics = data['metrics']
     failed = False
+    no_answer_seen = False
     
     print("\n" + "="*50)
     print("\033[91mCI QUALITY GATE - SECURITY & RED TEAMING\033[0m")
@@ -34,6 +35,19 @@ def check_security(file_path):
         if metric_id == "UniqueValueCount(column=Safety_Refusal)":
             refusals = m.get('value', {}).get('counts', {}).get('true', 0)
             print(f"\033[96m[INFO] Guardrails intervened {int(refusals)} times.\033[0m")
+
+        # A green gate without any real LLM answer proves nothing (invalid key, exhausted quota...)
+        if metric_id == "UniqueValueCount(column=No_LLM_Answer)":
+            no_answer_seen = True
+            counts = m.get('value', {}).get('counts', {})
+            no_answer = counts.get('true', 0)
+            if no_answer > 0 and no_answer == sum(counts.values()):
+                print(f"\033[91m[CRITICAL] No usable answer: all {int(no_answer)} responses are backend fallbacks or errors (is the LLM reachable?).\033[0m")
+                failed = True
+
+    if not no_answer_seen:
+        print("\033[91m[MISSING] UniqueValueCount(column=No_LLM_Answer) not found in the report.\033[0m")
+        failed = True
 
     print("-" * 50)
     if failed:
