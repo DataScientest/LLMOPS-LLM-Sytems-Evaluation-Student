@@ -30,7 +30,7 @@ build-eval:
 
 # --build: `make build` skips the evaluator (manual profile), so rebuild it here from src/eval
 run-eval:
-	docker compose --profile manual up --build evaluator
+	docker compose --profile manual run --rm --build evaluator
 
 links:
 	@echo "   Meilisearch: http://localhost:7700"
