@@ -113,7 +113,7 @@ services:
       - MEILI_URL=http://meilisearch:7700
       - MEILI_KEY=${MEILI_KEY}
       - PROXY_URL=http://litellm:4000
-      - PROXY_KEY=${LITELLM_KEY}
+      - PROXY_KEY=${PROXY_KEY}
     depends_on:
       meilisearch:
         condition: service_healthy
