@@ -2,6 +2,11 @@ models:
   - type: main
     engine: openai
     model: groq-llama3 # Le nom de notre modèle tel que défini dans LiteLLM proxy
+    # nemoguardrails >= 0.22 n'utilise plus LangChain par défaut et ignore la variable
+    # OPENAI_API_BASE : sans base_url explicite, les appels partent vers api.openai.com.
+    # On pointe donc explicitement le proxy LiteLLM (nom de service Docker Compose).
+    parameters:
+      base_url: http://litellm:4000/v1
   - type: embeddings
     engine: openai
     model: local-embeddings
