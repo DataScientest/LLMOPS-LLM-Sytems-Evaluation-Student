@@ -10,7 +10,8 @@ class ChunkHit(BaseModel):
     id: str
     document_id: str
     chunk_index: int
-    content: str
+    content: str  # preview (first 300 characters)
+    full_content: str = ""  # full chunk text, as given to the LLM
     metadata: Dict[str, Any] = {}
 
 class SearchResponse(BaseModel):
