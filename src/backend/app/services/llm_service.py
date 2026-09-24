@@ -32,7 +32,9 @@ RAG_ANSWER_ERROR = "I found chunks but could not generate an answer due to an er
 async def generate_rag_answer(query: str, context: str, search_method: str) -> str:
     """Use LiteLLM with context from retrieved chunks."""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # 90 s: on the free Groq tier (8k tokens/min), LiteLLM retries after a rate limit, which can take
+        # longer than 30 s. The API clients of the course (red teaming, monitoring, e2e tests) wait 120 s.
+        async with httpx.AsyncClient(timeout=90.0) as client:
             payload = {
                 "model": settings.LITELLM_MODEL,  # alias LiteLLM (variable LITELLM_MODEL)
                 "messages": [
