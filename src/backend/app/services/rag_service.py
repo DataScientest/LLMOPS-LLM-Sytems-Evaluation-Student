@@ -3,7 +3,7 @@ from app.core.config import settings
 from app.core.clients import meili_client
 from app.core.logging import logger
 from app.services.embeddings import generate_embeddings
-from app.services.llm_service import generate_rag_answer
+from app.services.llm_service import generate_rag_answer, RAG_ANSWER_FAILED, RAG_ANSWER_ERROR
 from app.utils.hashing import md5_hash
 from app.utils.cache import get_json, set_json
 
@@ -111,5 +111,7 @@ async def rag_search(query: str, k: int, use_embeddings: bool = True) -> Dict[st
         "cached": False,
         "search_method": search_method
     }
-    set_json(cache_key, {**result, "cached": False}, 600)
+    # A failed LLM call (rate limit, timeout...) is not cached: the next identical query retries the LLM
+    if answer not in (RAG_ANSWER_FAILED, RAG_ANSWER_ERROR):
+        set_json(cache_key, {**result, "cached": False}, 600)
     return result

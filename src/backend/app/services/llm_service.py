@@ -24,6 +24,11 @@ async def generate_chat_completion(messages: List[ChatMessage], model: str | Non
         return r.json()
 
 
+# Fallback answers when the LLM call fails (quota, rate limit, timeout...)
+RAG_ANSWER_FAILED = "I found relevant chunks but could not generate an answer."
+RAG_ANSWER_ERROR = "I found chunks but could not generate an answer due to an error."
+
+
 async def generate_rag_answer(query: str, context: str, search_method: str) -> str:
     """Use LiteLLM with context from retrieved chunks."""
     try:
@@ -53,7 +58,7 @@ async def generate_rag_answer(query: str, context: str, search_method: str) -> s
             if r.status_code == 200:
                 return r.json()["choices"][0]["message"]["content"]
             logger.error(f"LLM RAG failed: {r.text}")
-            return "I found relevant chunks but could not generate an answer."
+            return RAG_ANSWER_FAILED
     except Exception as e:
         logger.error(f"RAG LLM error: {e}")
-        return "I found chunks but could not generate an answer due to an error."
+        return RAG_ANSWER_ERROR
