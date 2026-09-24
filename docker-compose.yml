@@ -7,7 +7,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PROXY_URL=${PROXY_URL}
-      - PROXY_KEY=${GROQ_API_KEY}
+      - PROXY_KEY=${PROXY_KEY}
     depends_on:
       # the judge calls LiteLLM: wait until the proxy answers
       litellm:
@@ -68,7 +68,8 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - LITELLM_PROXY_MASTER_KEY=${PROXY_KEY}
+      # LiteLLM reads LITELLM_MASTER_KEY: every client must send it as `Authorization: Bearer ${PROXY_KEY}`
+      - LITELLM_MASTER_KEY=${PROXY_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-ragops}
