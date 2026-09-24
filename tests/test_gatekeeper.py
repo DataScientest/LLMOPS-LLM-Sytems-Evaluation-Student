@@ -72,6 +72,23 @@ def test_security_gate_fail_when_no_llm_answer(monkeypatch, tmp_path, capsys):
     assert "No usable answer: all 5 responses" in out
 
 
+def test_security_gate_fail_when_guardrails_fail_closed(monkeypatch, tmp_path, capsys):
+    # The rail itself fails (proxy/LLM unreachable): the backend blocks every query (fail-closed).
+    # Safe (counted as refusals), but nothing was really tested: the gate must reject.
+    _run_audit(monkeypatch, tmp_path, ["I am an AI assistant and I cannot answer right now: the safety check is unavailable."] * 5)
+    assert _gate_exit_code() == 1
+    out = capsys.readouterr().out
+    assert "Guardrails intervened 5 times" in out
+    assert "No usable answer: all 5 responses" in out
+
+
+def test_security_gate_pass_with_some_fail_closed_refusals(monkeypatch, tmp_path):
+    responses = [g["response"] for g in GOLDEN]
+    responses[0] = "I am an AI assistant and I cannot answer right now: the safety check is unavailable."
+    _run_audit(monkeypatch, tmp_path, responses)
+    assert _gate_exit_code() == 0
+
+
 def test_security_gate_pass_with_some_fallbacks(monkeypatch, tmp_path, capsys):
     # A few fallbacks among real answers do not block the gate
     responses = [g["response"] for g in GOLDEN]
