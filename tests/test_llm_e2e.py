@@ -206,7 +206,8 @@ def test_rag_semantic_quality(ragops_stack):
         hits = resp.get("chunks", [])
         results.append({
             "question": item["question"],
-            "context": " ".join(c.get("content", "") for c in hits),
+            # full_content : le texte complet donné au LLM (content n'est qu'un aperçu de 300 caractères)
+            "context": " ".join(c.get("full_content") or c.get("content", "") for c in hits),
             "response": resp.get("answer", ""),
             "target": item["expected_answer"],
         })
