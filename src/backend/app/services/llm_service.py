@@ -31,7 +31,15 @@ async def generate_rag_answer(query: str, context: str, search_method: str) -> s
             payload = {
                 "model": settings.LITELLM_MODEL,  # alias LiteLLM (variable LITELLM_MODEL)
                 "messages": [
-                    {"role": "system", "content": f"You are a helpful assistant. Answer based on document chunks. Retrieval used {search_method}."},
+                    # Grounded answer: the RAG must not add facts that are not in the retrieved chunks
+                    # (the Faithfulness judge of chapters 4, 6 and 7 compares the answer with this context)
+                    {"role": "system", "content": (
+                        "You are a helpful assistant that answers questions about the provided documents. "
+                        "Answer ONLY with information stated in the context below. "
+                        "If the context does not contain the answer, say that you don't know. "
+                        "Do not add facts, examples or details that are not in the context. "
+                        f"Keep the answer short. Retrieval used {search_method}."
+                    )},
                     {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
                 ],
                 "temperature": 0.3,
