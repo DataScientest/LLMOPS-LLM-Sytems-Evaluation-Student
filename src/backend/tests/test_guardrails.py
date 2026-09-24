@@ -78,5 +78,26 @@ class RagRouteTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.search_method, "blocked_by_guardrails")
 
 
+class NemoConfigTest(unittest.TestCase):
+    """The real nemo_config/ (parsed only: no rail is built, no model is called)."""
+
+    def test_intent_is_detected_by_embeddings_only(self):
+        # A reasoning model (gpt-oss-20b) does not complete the Colang "User intent:" prompt:
+        # the intent must come from the similarity with the rail.co examples, not from the LLM.
+        user_messages = search._rails_config.rails.dialog.user_messages
+        self.assertTrue(user_messages.embeddings_only)
+        self.assertIsNotNone(user_messages.embeddings_only_similarity_threshold)
+        # Without a fallback intent, a message below the threshold would go back to the LLM
+        self.assertEqual(user_messages.embeddings_only_fallback_intent, "asks a regular question")
+
+    def test_every_intent_has_a_flow_with_a_predefined_answer(self):
+        config = search._rails_config
+        flows = {flow["id"] for flow in config.flows}
+        self.assertEqual(flows, {"jailbreak prevention", "regular question"})
+        # Predefined bot messages: NeMo answers without calling the LLM
+        self.assertEqual(config.bot_messages["refuse to respond"], [search.GUARDRAIL_REFUSAL])
+        self.assertNotIn(search.GUARDRAIL_REFUSAL, config.bot_messages["allow the query"][0])
+
+
 if __name__ == "__main__":
     unittest.main()

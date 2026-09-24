@@ -7,6 +7,24 @@ models:
     # On pointe donc explicitement le proxy LiteLLM (nom de service Docker Compose).
     parameters:
       base_url: http://litellm:4000/v1
+  # Embeddings used to match the user message against the Colang examples:
+  # the local TEI model (all-MiniLM-L6-v2) exposed by LiteLLM as `local-embeddings`.
   - type: embeddings
     engine: openai
     model: local-embeddings
+    parameters:
+      base_url: http://litellm:4000/v1
+
+rails:
+  dialog:
+    user_messages:
+      # The user intent is chosen by similarity with the examples of rails.co, without any LLM call.
+      # Reasoning models such as gpt-oss-20b (behind the groq-llama3 alias) do not complete the
+      # "User intent:" prompt of Colang 1.0: the jailbreak flow was never triggered.
+      embeddings_only: true
+      # Similarity score (0-1) above which the closest example gives the intent. Calibrated on the
+      # red teaming prompts of the course: the attacks score 0.44-0.56, "What is Linear Algebra?" 0.39.
+      embeddings_only_similarity_threshold: 0.43
+      # Intent used below the threshold: handled by the "regular question" flow of rails.co
+      # (predefined bot message, hence no LLM call either).
+      embeddings_only_fallback_intent: asks a regular question
