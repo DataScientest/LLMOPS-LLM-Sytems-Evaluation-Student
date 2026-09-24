@@ -24,9 +24,9 @@ import test_llm_e2e as e2e
 # ── Juge LLM factice (hors-ligne, déterministe) ─────────────────────────────
 # Remplace OpenAIWrapper.complete (le même point d'entrée que le patch "JSON mode"
 # du cours) : les descripteurs LLM d'Evidently (ContextRelevance, FaithfulnessLLMEval,
-# CompletenessLLMEval) s'exécutent réellement, seul l'appel réseau est simulé.
+# Answer Relevance LLMEval) s'exécutent réellement, seul l'appel réseau est simulé.
 # Score = part des mots significatifs du texte évalué présents dans la référence
-# (CONTEXT pour ContextRelevance, SOURCE pour Faithfulness/Completeness).
+# (CONTEXT pour ContextRelevance, SOURCE pour Faithfulness).
 
 _STOP = {"what", "is", "a", "an", "the", "of", "to", "and", "in", "for", "that", "this",
          "are", "it", "its", "we", "us", "our", "with", "be", "by", "on", "as", "all", "yes",
@@ -52,6 +52,12 @@ async def fake_judge_complete(self, messages, *args, **kwargs):
                  or _between(prompt, "-----source_starts-----", "-----source_finishes-----"))
     words = _words(text)
     score = round(len(words & _words(reference)) / len(words), 2) if words else 0.0
+    # Answer Relevance: share of the QUESTION's significant words addressed by the response.
+    # ContextRelevance also has a QUESTION block, but it scores the CONTEXT: skip it here.
+    question = _between(prompt, "-----question_starts-----", "-----question_ends-----")
+    if question and not reference:
+        asked = _words(question)
+        score = round(len(asked & words) / len(asked), 2) if asked else 0.0
     positive, negative = re.search(r"into two categories: (\w+) and (\w+)", prompt).groups()
     # l'ordre des catégories varie selon le descripteur : on repère la catégorie "positive"
     if positive.startswith(("IR", "UN", "IN")):
@@ -114,6 +120,18 @@ def test_semantic_gate_fail_hallucination(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "[PASSED] Context Precision" in out
     assert "[FAILED] Faithfulness" in out
+
+
+def test_semantic_gate_fail_off_topic_answer(monkeypatch, capsys):
+    # Off-topic answers: the Answer Relevance judge sees the QUESTION and flags them
+    off_topic = "Kubernetes is a popular container orchestration system created by Google."
+    monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
+    monkeypatch.setattr(e2e, "query_rag", _rag_from_golden([{**g, "expected_answer": off_topic} for g in GOLDEN]))
+    with pytest.raises(pytest.fail.Exception, match="SEMANTIC QUALITY BELOW THRESHOLD"):
+        e2e.test_rag_semantic_quality(None)
+    out = capsys.readouterr().out
+    assert "[PASSED] Context Precision" in out
+    assert "[FAILED] Answer Relevance" in out
 
 
 def test_semantic_gate_fail_when_judge_errors(monkeypatch):

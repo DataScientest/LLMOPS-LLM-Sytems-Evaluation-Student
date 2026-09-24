@@ -16,10 +16,12 @@ from testcontainers.compose import DockerCompose
 from evidently import Report, Dataset, DataDefinition
 from evidently.presets import TextEvals, DataDriftPreset
 from evidently.descriptors import (
-    ContextRelevance, CompletenessLLMEval, FaithfulnessLLMEval,
+    ContextRelevance, FaithfulnessLLMEval, LLMEval,
     Sentiment, TextLength, RegExp,
 )
 from evidently.legacy.utils.llm.wrapper import OpenAIWrapper, LLMResult
+from evidently.llm.models import LLMMessage
+from evidently.llm.templates import BinaryClassificationPromptTemplate, Uncertainty
 
 # --- PATCH : Force JSON Mode for Evidently LLM Judges ---
 _original_complete = OpenAIWrapper.complete
@@ -52,6 +54,33 @@ os.environ["OPENAI_BASE_URL"] = os.getenv("OPENAI_BASE_URL", "http://localhost:4
 os.environ["OPENAI_API_KEY"] = os.getenv("PROXY_KEY", "sk-litellm-proxy-key")
 os.environ["OPENAI_TIMEOUT"] = "120"
 os.environ["HTTPX_TIMEOUT"] = "120"
+
+# Answer Relevance judge: unlike CompletenessLLMEval (response vs context), its prompt receives
+# the QUESTION. target_category = IRRELEVANT -> score 0.0 = RELEVANT, 1.0 = IRRELEVANT.
+ANSWER_RELEVANCE_TEMPLATE = BinaryClassificationPromptTemplate(
+    pre_messages=[LLMMessage.system(
+        "You are an impartial expert evaluator. You will be given a QUESTION and a RESPONSE. "
+        "Your job is to evaluate whether the RESPONSE is relevant to the QUESTION."
+    )],
+    criteria="""A RELEVANT response:
+- Directly addresses the QUESTION asked by the user.
+- Stays on topic, without digressions or unrelated information.
+- Clearly says that the answer is unknown when the information is missing.
+
+An IRRELEVANT response:
+- Does not answer the QUESTION, or answers another question.
+- Digresses into information that does not help to answer the QUESTION.
+
+Here is the QUESTION:
+-----question_starts-----
+{question}
+-----question_ends-----""",
+    target_category="IRRELEVANT",
+    non_target_category="RELEVANT",
+    uncertainty=Uncertainty.UNKNOWN,
+    include_reasoning=True,
+    include_score=True,
+)
 
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -208,8 +237,8 @@ def test_rag_semantic_quality(ragops_stack):
         ds = Dataset.from_pandas(df, data_definition=data_def, descriptors=[
             FaithfulnessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
                                 include_score=True, alias="Faithfulness"),
-            CompletenessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
-                                include_score=True, alias="Answer Relevance"),
+            LLMEval("response", template=ANSWER_RELEVANCE_TEMPLATE, additional_columns={"question": "question"},
+                    provider="openai", model=EVAL_MODEL, alias="Answer Relevance"),
         ])
         report = Report(metrics=[TextEvals()])
         res_llm = json.loads(report.run(reference_data=None, current_data=ds).json())
@@ -224,7 +253,7 @@ def test_rag_semantic_quality(ragops_stack):
         "MeanValue(column=Faithfulness score)": 0.9,
         "MeanValue(column=Answer Relevance score)": 0.8,
     }
-    # The judge scores the negative category (1.0 = UNFAITHFUL / INCOMPLETE): compare 1 - score
+    # The judge scores the negative category (1.0 = UNFAITHFUL / IRRELEVANT): compare 1 - score
     inverted = {"MeanValue(column=Faithfulness score)", "MeanValue(column=Answer Relevance score)"}
 
     # Judge errors (invalid key, 429...) are caught above: without their metrics, fail explicitly
