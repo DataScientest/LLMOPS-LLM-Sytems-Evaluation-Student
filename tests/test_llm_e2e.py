@@ -135,7 +135,9 @@ def ragops_stack():
     compose_path = os.path.join(os.path.dirname(__file__), "..")
     print("\n[CI] Démarrage de l'environnement via Testcontainers...")
 
-    with DockerCompose(compose_path, compose_file_name="docker-compose.yml", wait=False) as compose:
+    # build=True : reconstruit les images de la stack (backend...) à partir du code courant ;
+    # sinon Testcontainers réutilise une image déjà construite, qui peut être périmée
+    with DockerCompose(compose_path, compose_file_name="docker-compose.yml", build=True, wait=False) as compose:
 
         # 1. Attente du backend
         print("[CI] En attente du Backend...")
