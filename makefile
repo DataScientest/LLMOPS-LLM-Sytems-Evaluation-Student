@@ -11,18 +11,26 @@ up:
 	@echo "   Backend: http://localhost:18000"
 	@echo "   Health:  http://localhost:18000/health"
 
+# --profile manual also removes the evaluator container (otherwise it keeps a dangling network)
 down:
 	@echo "⏹️  Stopping RAGOPS services..."
-	docker compose down
+	docker compose --profile manual down
 
 restart:
 	@echo "🔄 Restarting RAGOPS services..."
-	docker compose down
+	docker compose --profile manual down
 	docker compose up -d
 
 logs:
 	@echo "📄 Showing service logs..."
 	docker-compose logs -f backend
+
+build-eval:
+	cd src/eval && uv lock && cd ../.. && docker compose build evaluator
+
+# --build: `make build` skips the evaluator (manual profile), so rebuild it here from src/eval
+run-eval:
+	docker compose --profile manual run --rm --build evaluator
 
 links:
 	@echo "   Meilisearch: http://localhost:7700"

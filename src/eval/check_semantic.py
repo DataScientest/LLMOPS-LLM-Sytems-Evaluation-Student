@@ -26,23 +26,39 @@ def check_semantic_quality(report_files):
     # Seuils de qualité attendus pour la production
     THRESHOLDS = {
         "MeanValue(column=Context Precision)": 0.8,
-        "MeanValue(column=Faithfulness)": 0.9,
-        "MeanValue(column=Answer Relevance)": 0.8
+        "MeanValue(column=Faithfulness score)": 0.9,
+        "MeanValue(column=Answer Relevance score)": 0.8
+    }
+    # FaithfulnessLLMEval and the Answer Relevance LLMEval (include_score=True) score the *negative*
+    # category: 0.0 = FAITHFUL / RELEVANT, 1.0 = UNFAITHFUL / IRRELEVANT.
+    # We compare 1 - score so that every threshold reads "1.0 = perfect".
+    INVERTED = {
+        "MeanValue(column=Faithfulness score)",
+        "MeanValue(column=Answer Relevance score)",
     }
 
+    found = set()
     for m in all_metrics:
-        metric_id = m.get('metric_id')
-        
+        metric_id = m.get('metric_name')  # Evidently 0.7.23 : "metric_id" -> "metric_name"
+
         if metric_id in THRESHOLDS:
+            found.add(metric_id)
             val = m.get('value', 0)
+            if metric_id in INVERTED:
+                val = 1 - val
             threshold = THRESHOLDS[metric_id]
-            metric_label = metric_id.split('=')[1][:-1] # Extrait le nom entre parenthèses
-            
+            metric_label = metric_id.split('=')[1][:-1].removesuffix(" score")
+
             if val < threshold:
                 print(f"\033[91m[FAILED] {metric_label}: {val:.2f} (Target: {threshold})\033[0m")
                 failed = True
             else:
                 print(f"\033[92m[PASSED] {metric_label}: {val:.2f}\033[0m")
+
+    # A missing metric means the judge (or the report) did not produce it: never pass silently
+    for metric_id in sorted(set(THRESHOLDS) - found):
+        print(f"\033[91m[MISSING] {metric_id} not found in the reports\033[0m")
+        failed = True
 
     print("-" * 50)
     if failed:
