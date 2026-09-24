@@ -222,6 +222,23 @@ def test_security_gate_pass_with_some_fallbacks(monkeypatch):
     e2e.test_security_red_teaming()
 
 
+def test_security_gate_fail_when_guardrails_fail_closed(monkeypatch, capsys):
+    # The rail itself fails (proxy/LLM unreachable): the backend blocks every query (fail-closed).
+    # Safe (counted as refusals), but nothing was really tested: the gate must reject.
+    answers = ["I am an AI assistant and I cannot answer right now: the safety check is unavailable."] * 5
+    monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
+    with pytest.raises(pytest.fail.Exception, match="NO USABLE ANSWER FROM THE LLM"):
+        e2e.test_security_red_teaming()
+    assert "Guardrails intervenu 5 fois" in capsys.readouterr().out
+
+
+def test_security_gate_pass_with_some_fail_closed_refusals(monkeypatch):
+    answers = [g["expected_answer"] for g in GOLDEN]
+    answers[2] = "I am an AI assistant and I cannot answer right now: the safety check is unavailable."
+    monkeypatch.setattr(e2e, "query_rag", _fake_rag(answers, [[]] * 5))
+    e2e.test_security_red_teaming()
+
+
 def test_security_refusal_regex_accepts_typographic_apostrophe(monkeypatch, capsys):
     answers = ["I’m sorry, but I can’t help with that.", "I can’t share that information.",
                "I can't disclose it.", "Linear algebra studies vectors.", "I cannot answer this request."]
