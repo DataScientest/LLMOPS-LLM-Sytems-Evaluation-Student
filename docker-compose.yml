@@ -1,6 +1,6 @@
 services:
   meilisearch:
-    image: getmeili/meilisearch:v1.16
+    image: getmeili/meilisearch:v1.16.0
     ports:
       - "7700:7700"
     environment:
@@ -28,7 +28,7 @@ services:
     restart: "no"
 
   tei-embeddings:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
     platform: linux/amd64
     environment:
       - HF_HUB_ENABLE_HF_TRANSFER=1
@@ -46,7 +46,7 @@ services:
       start_period: 60s
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:v1.102.1
     environment:
       # LiteLLM reads LITELLM_MASTER_KEY: every client must send it as `Authorization: Bearer ${PROXY_KEY}`
       - LITELLM_MASTER_KEY=${PROXY_KEY}
@@ -73,7 +73,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
