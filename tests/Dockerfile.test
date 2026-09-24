@@ -11,4 +11,4 @@ WORKDIR /app
 COPY . .
 RUN uv pip install --system ./tests
 
-CMD ["pytest", "-v", "-s", "--disable-warnings", "--tb=no", "tests/test_llm_e2e.py"]
+CMD ["pytest", "-m", "live", "-v", "-s", "--disable-warnings", "--tb=no", "tests/test_llm_e2e.py"]
