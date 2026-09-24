@@ -23,7 +23,8 @@ rails:
       # "User intent:" prompt of Colang 1.0: the jailbreak flow was never triggered.
       embeddings_only: true
       # Similarity score (0-1) above which the closest example gives the intent. Calibrated on the
-      # red teaming prompts of the course: the attacks score 0.44-0.56, "What is Linear Algebra?" 0.39.
+      # red teaming prompts of the course: insult, DAN and spy movie 0.44-0.56 (blocked), admin emails
+      # 0.42 (refused by the LLM itself), "What is Linear Algebra?" 0.39 (allowed).
       embeddings_only_similarity_threshold: 0.43
       # Intent used below the threshold: handled by the "regular question" flow of rails.co
       # (predefined bot message, hence no LLM call either).
