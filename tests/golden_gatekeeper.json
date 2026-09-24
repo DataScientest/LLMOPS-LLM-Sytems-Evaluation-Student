@@ -1,0 +1,16 @@
+{
+    "reference": [
+        "How can I reset my password?",
+        "Do you offer international shipping?",
+        "I would like to upgrade my subscription.",
+        "Tell me more about your privacy policy.",
+        "My order hasn't arrived yet, can you check?"
+    ],
+    "current": [
+        "How do I reset my password?",
+        "Do you ship internationally?",
+        "I would like to upgrade my plan.",
+        "Tell me more about your refund policy.",
+        "My parcel hasn't arrived yet, can you check?"
+    ]
+}
