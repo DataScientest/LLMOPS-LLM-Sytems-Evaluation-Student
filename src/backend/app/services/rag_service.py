@@ -83,9 +83,10 @@ async def rag_search(query: str, k: int, use_embeddings: bool = True) -> Dict[st
             "id": h.get("id", f"chunk-{i}"),
             "document_id": doc_id,
             "chunk_index": idx,
-            # Full chunk text: the LLM judges (Faithfulness, chapters 6-7) compare the answer with these
-            # chunks. A truncated excerpt made grounded answers look unfaithful.
-            "content": content,
+            "content": content[:300] + "..." if len(content) > 300 else content,
+            # Full chunk text, as sent to the LLM: the Faithfulness judges (chapters 6-7) must compare the
+            # answer with this text, not with the 300-character preview above
+            "full_content": content,
             "metadata": {k: v for k, v in h.items() if k not in ["text", "content", "_vectors"]}
         })
 
