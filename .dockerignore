@@ -1,0 +1,7 @@
+# keep the build context small: virtualenvs (the image builds its own), reports, caches, secrets
+.git
+**/.venv
+reports
+**/__pycache__
+*.pyc
+.env
