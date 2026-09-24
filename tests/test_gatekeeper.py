@@ -3,7 +3,7 @@
 - Évaluateur : sur cette branche `src/eval/eval_rag.py` est volontairement vide (l'étudiant
   l'écrit). Le test REPRODUIT donc la construction des rapports de la solution du cours
   (ContextRelevance -> "Context Precision", FaithfulnessLLMEval -> "Faithfulness",
-  CompletenessLLMEval -> "Answer Relevance", preset TextEvals) : vrais
+  LLMEval with a question-aware template -> "Answer Relevance", preset TextEvals) : vrais
   `Report(...).run(...)` Evidently 0.7.23 sauvegardés en JSON.
 - Juge LLM : remplacé par un juge factice déterministe (hors-ligne).
 - Gatekeeper : le VRAI `src/eval/check_semantic.py` (exit 0 = PASS, exit 1 = FAIL).
@@ -13,8 +13,11 @@ hallucinations) et rapports sans les scores du juge (juge en erreur).
 Faithfulness / Answer Relevance sont des descripteurs catégoriels : avec `include_score=True`
 (solution du cours), Evidently ajoute les colonnes `<alias> score` et donc les métriques
 `MeanValue(column=Faithfulness score)` / `MeanValue(column=Answer Relevance score)`.
-Ce score mesure la catégorie négative (0.0 = FAITHFUL/COMPLETE, 1.0 = UNFAITHFUL/INCOMPLETE) :
+Ce score mesure la catégorie négative (0.0 = FAITHFUL/RELEVANT, 1.0 = UNFAITHFUL/IRRELEVANT) :
 check_semantic.py compare `1 - score` aux seuils.
+Answer Relevance: CompletenessLLMEval never sees the question (it compares the response to the
+context), so the course uses an LLMEval whose template receives the QUESTION through
+`additional_columns={"question": "question"}`.
 """
 import json
 import os
@@ -25,8 +28,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from evidently import Dataset, DataDefinition, Report
-from evidently.descriptors import CompletenessLLMEval, ContextRelevance, FaithfulnessLLMEval
+from evidently.descriptors import ContextRelevance, FaithfulnessLLMEval, LLMEval
 from evidently.legacy.utils.llm.wrapper import LLMResult, OpenAIWrapper
+from evidently.llm.models import LLMMessage
+from evidently.llm.templates import BinaryClassificationPromptTemplate, Uncertainty
 from evidently.presets import TextEvals
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,13 +43,42 @@ GOLDEN = json.loads((Path(__file__).parent / "golden_gatekeeper.json").read_text
 assert len(GOLDEN) == 5
 EVAL_MODEL = os.getenv("EVAL_MODEL", "groq-llama3")
 
+# Same judge as the course solution (eval_rag.py): the prompt receives the QUESTION and the
+# RESPONSE. target_category = IRRELEVANT -> score 0.0 = RELEVANT, 1.0 = IRRELEVANT (like Faithfulness).
+ANSWER_RELEVANCE_TEMPLATE = BinaryClassificationPromptTemplate(
+    pre_messages=[LLMMessage.system(
+        "You are an impartial expert evaluator. You will be given a QUESTION and a RESPONSE. "
+        "Your job is to evaluate whether the RESPONSE is relevant to the QUESTION."
+    )],
+    criteria="""A RELEVANT response:
+- Directly addresses the QUESTION asked by the user.
+- Stays on topic, without digressions or unrelated information.
+- Clearly says that the answer is unknown when the information is missing.
+
+An IRRELEVANT response:
+- Does not answer the QUESTION, or answers another question.
+- Digresses into information that does not help to answer the QUESTION.
+
+Here is the QUESTION:
+-----question_starts-----
+{question}
+-----question_ends-----""",
+    target_category="IRRELEVANT",
+    non_target_category="RELEVANT",
+    uncertainty=Uncertainty.UNKNOWN,
+    include_reasoning=True,
+    include_score=True,
+)
+
 
 # ── Juge LLM factice (hors-ligne, déterministe) ─────────────────────────────
 # Remplace OpenAIWrapper.complete (le même point d'entrée que le patch "JSON mode"
 # du cours) : les descripteurs LLM d'Evidently (ContextRelevance, FaithfulnessLLMEval,
-# CompletenessLLMEval) s'exécutent réellement, seul l'appel réseau est simulé.
+# Answer Relevance LLMEval) s'exécutent réellement, seul l'appel réseau est simulé.
 # Score = part des mots significatifs du texte évalué présents dans la référence
-# (CONTEXT pour ContextRelevance, SOURCE pour Faithfulness/Completeness).
+# (CONTEXT pour ContextRelevance, SOURCE pour Faithfulness).
+# Answer Relevance (QUESTION block in the prompt): share of the question's significant words
+# that the response addresses.
 
 _STOP = {"what", "is", "a", "an", "the", "of", "to", "and", "in", "for", "that", "this",
          "are", "it", "its", "we", "us", "our", "with", "be", "by", "on", "as", "all", "yes",
@@ -70,6 +104,11 @@ async def fake_judge_complete(self, messages, *args, **kwargs):
                  or _between(prompt, "-----source_starts-----", "-----source_finishes-----"))
     words = _words(text)
     score = round(len(words & _words(reference)) / len(words), 2) if words else 0.0
+    # ContextRelevance also has a QUESTION block, but it scores the CONTEXT: skip it here
+    question = _between(prompt, "-----question_starts-----", "-----question_ends-----")
+    if question and not reference:
+        asked = _words(question)
+        score = round(len(asked & words) / len(asked), 2) if asked else 0.0
     positive, negative = re.search(r"into two categories: (\w+) and (\w+)", prompt).groups()
     # l'ordre des catégories varie selon le descripteur : on repère la catégorie "positive"
     if positive.startswith(("IR", "UN", "IN")):
@@ -95,8 +134,8 @@ def _write_reports(rows: list[dict], out_dir: Path) -> list[str]:
     dataset_llm = Dataset.from_pandas(df, data_definition=data_def, descriptors=[
         FaithfulnessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
                             include_score=True, alias="Faithfulness"),
-        CompletenessLLMEval("response", context="context", provider="openai", model=EVAL_MODEL,
-                            include_score=True, alias="Answer Relevance"),
+        LLMEval("response", template=ANSWER_RELEVANCE_TEMPLATE, additional_columns={"question": "question"},
+                provider="openai", model=EVAL_MODEL, alias="Answer Relevance"),
     ])
     paths = [out_dir / "chapter4_context_precision.json", out_dir / "chapter4_semantic_report.json"]
     Report(metrics=[TextEvals()]).run(reference_data=None, current_data=dataset).save_json(str(paths[0]))
@@ -136,6 +175,17 @@ def test_semantic_gate_fail_hallucination(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "[PASSED] Context Precision" in out  # retrieval is fine, only the answers are wrong
     assert "[FAILED] Faithfulness" in out
+
+
+def test_semantic_gate_fail_off_topic_answer(monkeypatch, tmp_path, capsys):
+    # Off-topic answers: the Answer Relevance judge sees the QUESTION and flags them
+    off_topic = "Kubernetes is a popular container orchestration system created by Google."
+    altered = [{**g, "response": off_topic} for g in GOLDEN[:3]] + GOLDEN[3:]
+    monkeypatch.setattr(OpenAIWrapper, "complete", fake_judge_complete)
+    assert _gate_exit_code(_write_reports(altered, tmp_path)) == 1
+    out = capsys.readouterr().out
+    assert "[PASSED] Context Precision" in out
+    assert "[FAILED] Answer Relevance" in out
 
 
 def test_semantic_gate_fail_when_judge_scores_missing(monkeypatch, tmp_path, capsys):

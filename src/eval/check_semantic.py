@@ -29,8 +29,8 @@ def check_semantic_quality(report_files):
         "MeanValue(column=Faithfulness score)": 0.9,
         "MeanValue(column=Answer Relevance score)": 0.8
     }
-    # FaithfulnessLLMEval / CompletenessLLMEval (include_score=True) score the *negative*
-    # category: 0.0 = FAITHFUL / COMPLETE, 1.0 = UNFAITHFUL / INCOMPLETE.
+    # FaithfulnessLLMEval and the Answer Relevance LLMEval (include_score=True) score the *negative*
+    # category: 0.0 = FAITHFUL / RELEVANT, 1.0 = UNFAITHFUL / IRRELEVANT.
     # We compare 1 - score so that every threshold reads "1.0 = perfect".
     INVERTED = {
         "MeanValue(column=Faithfulness score)",
