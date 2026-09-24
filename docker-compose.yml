@@ -4,15 +4,21 @@ services:
     volumes:
       - ./reports:/app/reports
       - ./data:/app/data
-      - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - PROXY_URL=${PROXY_URL}
-      - PROXY_KEY=${GROQ_API_KEY}
+      - PROXY_KEY=${PROXY_KEY}
+    depends_on:
+      # the judge calls LiteLLM: wait until the proxy answers
+      litellm:
+        condition: service_healthy
+      # the red-teaming script calls the RAG API
+      backend:
+        condition: service_healthy
     profiles: ["manual"]
 
   meilisearch:
-    image: getmeili/meilisearch:v1.16
+    image: getmeili/meilisearch:v1.16.0
     ports:
       - "7700:7700"
     environment:
@@ -40,7 +46,7 @@ services:
     restart: "no"
 
   tei-embeddings:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
     platform: linux/amd64
     environment:
       - HF_HUB_ENABLE_HF_TRANSFER=1
@@ -58,9 +64,12 @@ services:
       start_period: 60s
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:v1.102.1
+    ports:
+      - "4000:4000"
     environment:
-      - LITELLM_PROXY_MASTER_KEY=${PROXY_KEY}
+      # LiteLLM reads LITELLM_MASTER_KEY: every client must send it as `Authorization: Bearer ${PROXY_KEY}`
+      - LITELLM_MASTER_KEY=${PROXY_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-ragops}
@@ -73,13 +82,16 @@ services:
       - redis
     restart: always
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:4000/health" ]
-      interval: 30s
+      # The LiteLLM image ships neither curl nor wget: use its Python interpreter.
+      # /health/liveliness needs no key and does not call the LLM providers.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 12
+      start_period: 30s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     command: [ "redis-server", "--save", "60", "1", "--loglevel", "warning" ]
     volumes:
       - redis_data:/data
@@ -118,7 +130,7 @@ services:
       - MEILI_URL=http://meilisearch:7700
       - MEILI_KEY=${MEILI_KEY}
       - PROXY_URL=http://litellm:4000
-      - PROXY_KEY=${LITELLM_KEY}
+      - PROXY_KEY=${PROXY_KEY}
     depends_on:
       meilisearch:
         condition: service_healthy

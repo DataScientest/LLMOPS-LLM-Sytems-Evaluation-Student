@@ -1,0 +1,18 @@
+# Environnement des tests hors-ligne du gatekeeper (indépendant de src/eval).
+# Lancer : uv run --project tests pytest tests/test_gatekeeper.py -q
+[project]
+name = "llm-eval-gatekeeper-tests"
+version = "0.1.0"
+requires-python = "==3.12.*"
+dependencies = [
+    "pytest==9.1.1",
+    "pandas==3.0.6",
+    "evidently==0.7.23",
+    "requests==2.34.2",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "live: tests nécessitant une vraie API / clé LLM (désactivés par défaut, lancer avec -m live)",
+]
+addopts = "-m 'not live'"
