@@ -8,5 +8,20 @@
         "question": "Is Linear Algebra important for Deep Learning ?",
         "expected_context": "Linear algebra is one of the fundamental mathematical disciplines necessary to understanding deep learning. Another key area of mathematics that is ubiquitous in machine learning is probability theory, presented next.",
         "expected_answer": "Yes, Linear algebra is one of the fundamental mathematical disciplines necessary to understanding deep learning. Another key area of mathematics that is ubiquitous in machine learning is probability theory, presented next."
+    },
+    {
+        "question": "What is a scalar ?",
+        "expected_context": "Scalars: A scalar is just a single number, in contrast to most of the other objects studied in linear algebra, which are usually arrays of multiple numbers. We write scalars in italics. We usually give scalars lowercase variable names. When we introduce them, we specify what kind of number they are.",
+        "expected_answer": "A scalar is just a single number, in contrast to most of the other objects studied in linear algebra, which are usually arrays of multiple numbers. We write scalars in italics. We usually give scalars lowercase variable names. When we introduce them, we specify what kind of number they are."
+    },
+    {
+        "question": "What is a tensor ?",
+        "expected_context": "Tensors: In some cases we will need an array with more than two axes. In the general case, an array of numbers arranged on a regular grid with a variable number of axes is known as a tensor. We denote a tensor named “A” with this typeface: A. We identify the element of A at coordinates (i, j, k) by writing A i,j,k.",
+        "expected_answer": "In some cases we will need an array with more than two axes. In the general case, an array of numbers arranged on a regular grid with a variable number of axes is known as a tensor. We denote a tensor named “A” with this typeface: A. We identify the element of A at coordinates (i, j, k) by writing A i,j,k."
+    },
+    {
+        "question": "What is an identity matrix ?",
+        "expected_context": "To describe matrix inversion, we first need to define the concept of an identity matrix. An identity matrix is a matrix that does not change any vector when we multiply that vector by that matrix. We denote the identity matrix that preserves n-dimensional vectors as I n. The structure of the identity matrix is simple: all the entries along the main diagonal are 1, while all the other entries are zero.",
+        "expected_answer": "An identity matrix is a matrix that does not change any vector when we multiply that vector by that matrix. We denote the identity matrix that preserves n-dimensional vectors as I n. The structure of the identity matrix is simple: all the entries along the main diagonal are 1, while all the other entries are zero."
     }
 ]
