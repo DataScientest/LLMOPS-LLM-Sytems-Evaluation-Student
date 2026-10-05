@@ -3,5 +3,8 @@ services:
     build: .
     volumes:
       - .:/app
+      # Anonymous volume: keeps the image's virtualenv instead of letting the bind mount
+      # hide it (otherwise uv recreates a root-owned .venv in the host project folder).
+      - /app/.venv
     environment:
       - PYTHONUNBUFFERED=1
