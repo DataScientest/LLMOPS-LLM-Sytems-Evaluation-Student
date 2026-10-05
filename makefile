@@ -40,6 +40,10 @@ run-tests:
 		-v $(PWD)/reports:/app/reports \
 		--network host ragops-tester
 
+# A fresh stack has an empty RAG index: ingest data/linear_algebra.pdf through the backend (localhost:18000)
+ingest:
+	uv run --no-project --with pypdf==6.19.0 --with requests==2.34.2 python tests/rag_setup.py
+
 build-monitoring:
 	docker build -t monitoring-push -f src/dashboard/Dockerfile src/dashboard
 

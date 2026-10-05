@@ -5,8 +5,9 @@ from app.core.logging import logger
 from app.models.chat import ChatMessage
 
 
-async def generate_chat_completion(messages: List[ChatMessage], model: str = "groq-llama3", temperature: float = 0.3) -> Dict[str, Any]:
+async def generate_chat_completion(messages: List[ChatMessage], model: str | None = None, temperature: float = 0.3) -> Dict[str, Any]:
     """Call LiteLLM chat completions API."""
+    model = model or settings.LITELLM_MODEL  # alias LiteLLM (variable LITELLM_MODEL)
     async with httpx.AsyncClient(timeout=30.0) as client:
         payload = {
             "model": model,
@@ -23,14 +24,29 @@ async def generate_chat_completion(messages: List[ChatMessage], model: str = "gr
         return r.json()
 
 
+# Fallback answers when the LLM call fails (quota, rate limit, timeout...)
+RAG_ANSWER_FAILED = "I found relevant chunks but could not generate an answer."
+RAG_ANSWER_ERROR = "I found chunks but could not generate an answer due to an error."
+
+
 async def generate_rag_answer(query: str, context: str, search_method: str) -> str:
     """Use LiteLLM with context from retrieved chunks."""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # 90 s: on the free Groq tier (8k tokens/min), LiteLLM retries after a rate limit, which can take
+        # longer than 30 s. The API clients of the course (red teaming, monitoring, e2e tests) wait 120 s.
+        async with httpx.AsyncClient(timeout=90.0) as client:
             payload = {
-                "model": "groq-llama3",
+                "model": settings.LITELLM_MODEL,  # alias LiteLLM (variable LITELLM_MODEL)
                 "messages": [
-                    {"role": "system", "content": f"You are a helpful assistant. Answer based on document chunks. Retrieval used {search_method}."},
+                    # Grounded answer: the RAG must not add facts that are not in the retrieved chunks
+                    # (the Faithfulness judge of chapters 4, 6 and 7 compares the answer with this context)
+                    {"role": "system", "content": (
+                        "You are a helpful assistant that answers questions about the provided documents. "
+                        "Answer ONLY with information stated in the context below. "
+                        "If the context does not contain the answer, say that you don't know. "
+                        "Do not add facts, examples or details that are not in the context. "
+                        f"Keep the answer short. Retrieval used {search_method}."
+                    )},
                     {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
                 ],
                 "temperature": 0.3,
@@ -44,7 +60,7 @@ async def generate_rag_answer(query: str, context: str, search_method: str) -> s
             if r.status_code == 200:
                 return r.json()["choices"][0]["message"]["content"]
             logger.error(f"LLM RAG failed: {r.text}")
-            return "I found relevant chunks but could not generate an answer."
+            return RAG_ANSWER_FAILED
     except Exception as e:
         logger.error(f"RAG LLM error: {e}")
-        return "I found chunks but could not generate an answer due to an error."
+        return RAG_ANSWER_ERROR

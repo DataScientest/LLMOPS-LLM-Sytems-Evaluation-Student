@@ -1,14 +1,15 @@
 [project]
 name = "ragops-e2e-tests"
 version = "0.1.0"
+requires-python = "==3.12.*"
 dependencies = [
-    "pytest==9.0.2",
-    "testcontainers[compose]==4.14.2",
-    "pandas==3.0.1",
-    "requests==2.32.5",
-    "evidently==0.7.2",
-    "openai==2.29.0",
-    "pypdf==4.1.0",
+    "pytest==9.1.1",
+    "testcontainers[compose]==4.15.0",
+    "pandas==3.0.6",
+    "requests==2.34.2",
+    "evidently==0.7.23",
+    "openai==3.19.0",
+    "pypdf==6.19.0",
 ]
 
 [build-system]
@@ -17,3 +18,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
+
+[tool.pytest.ini_options]
+markers = [
+    "live: tests nécessitant la stack Docker et/ou une vraie clé LLM (désactivés par défaut, lancer avec -m live)",
+]
+addopts = "-m 'not live'"

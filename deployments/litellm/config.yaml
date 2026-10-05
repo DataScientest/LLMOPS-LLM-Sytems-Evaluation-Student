@@ -1,13 +1,20 @@
 model_list:
   - model_name: groq-llama3
     litellm_params:
-      model: groq/llama-3.1-8b-instant
+      # groq/llama-3.1-8b-instant est décommissionné pour les offres free/developer de Groq
+      # depuis le 16/08/2026 (https://console.groq.com/docs/deprecations). Remplaçant officiel
+      # indiqué par Groq : openai/gpt-oss-20b. L'alias LiteLLM `groq-llama3` est conservé
+      # pour ne pas casser les clients (backend, NeMo, tests) : seul le modèle cible change.
+      model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
 
   # Local embeddings served by TEI (OpenAI-compatible embeddings API)
   - model_name: local-embeddings
     litellm_params:
-      model: openai/text-embedding-ada-002 
+      # Label passthrough : TEI sert sentence-transformers/all-MiniLM-L6-v2 (384 dimensions,
+      # cf. EMBED_DIM=384). L'ancien label `openai/text-embedding-ada-002` était trompeur
+      # (ce n'est pas un modèle OpenAI) : on nomme le vrai modèle servi par TEI.
+      model: openai/sentence-transformers/all-MiniLM-L6-v2
       api_key: "not-needed"
       api_base: "http://tei-embeddings:80" 
       custom_llm_provider: openai
@@ -17,7 +24,10 @@ model_list:
 
   - model_name: groq-qwen3
     litellm_params:
-      model: groq/qwen/qwen3-32b
+      # groq/qwen/qwen3-32b est décommissionné pour les offres free/developer de Groq
+      # depuis le 17/07/2026 (https://console.groq.com/docs/deprecations). Remplaçant officiel
+      # indiqué par Groq : openai/gpt-oss-120b. L'alias `groq-qwen3` (juge LLM) est conservé.
+      model: groq/openai/gpt-oss-120b
       api_key: os.environ/GROQ_API_KEY
 
 # Global LiteLLM settings

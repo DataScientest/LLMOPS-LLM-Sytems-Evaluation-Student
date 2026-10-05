@@ -28,23 +28,31 @@ async def get_rails() -> LLMRails:
     return _rails
 
 GUARDRAIL_REFUSAL = "I am an AI assistant and I cannot engage in jailbreaks or reveal secrets."
+# Fail-closed answer: returned when the rail itself fails (proxy or LLM unreachable, invalid key...)
+GUARDRAIL_UNAVAILABLE = "I am an AI assistant and I cannot answer right now: the safety check is unavailable."
+# NeMo turns a failed internal action into this answer instead of raising an exception
+NEMO_INTERNAL_ERROR = "I'm sorry, an internal error has occurred."
 
 async def check_guardrails(query: str) -> str | None:
     """Run the query through NeMo Guardrails.
-    Returns the guardrail refusal message if blocked, None if the query is safe."""
+    Returns the guardrail refusal message if blocked, None if the query is safe.
+    Fail-closed: if the rail itself fails, the query is blocked with GUARDRAIL_UNAVAILABLE."""
     try:
         rails = await get_rails()
         response = await rails.generate_async(
             messages=[{"role": "user", "content": query}]
         )
         content = response.get("content", "")
+        if NEMO_INTERNAL_ERROR in content:
+            raise RuntimeError(f"NeMo Guardrails internal error: {content}")
         # If NeMo returned its refusal message, the query was blocked
         if GUARDRAIL_REFUSAL in content:
             return content
         return None
-    except Exception as e:
-        logger.warning(f"NeMo Guardrails check failed, allowing query through: {e}")
-        return None
+    except Exception:
+        # Fail-closed: a query that could not be checked must never reach the LLM
+        logger.exception("NeMo Guardrails check failed, blocking the query (fail-closed)")
+        return GUARDRAIL_UNAVAILABLE
 
 # Routes
 @router.post("/search-direct", response_model=DirectSearchResult)
@@ -73,7 +81,7 @@ async def rag_route(req: SearchRequest):
             chunks=[],
             total_chunks_found=0,
             cached=False,
-            search_method="blocked_by_guardrails"
+            search_method="guardrails_unavailable" if blocked == GUARDRAIL_UNAVAILABLE else "blocked_by_guardrails"
         )
 
     # Safe query → proceed with RAG pipeline

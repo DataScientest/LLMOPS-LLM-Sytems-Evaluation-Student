@@ -6,3 +6,5 @@ redis_data
 meili_data
 __pycache__
 *.pyc
+# keep the API keys out of the images (tests/Dockerfile.test copies the whole project)
+.env
